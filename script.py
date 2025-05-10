@@ -1,5 +1,5 @@
 from qualer_sdk import ApiClient, AssetsApi, AssetServiceRecordsApi
-from qualer_sdk import Configuration, rest, ServiceOrderItemDocumentsApi
+from qualer_sdk import Configuration, ServiceOrderItemDocumentsApi
 from qualer_sdk import ServiceOrderItemsApi, ServiceOrderDocumentsApi
 import os
 import pandas as pd
@@ -24,10 +24,14 @@ service_order_item_documents_api = ServiceOrderItemDocumentsApi(client)
 
 # List of asset IDs to collect
 asset_ids = [  # FIXME: Add High Temp wires (J, K, Ultra K, Ultra N)
-    1235400, 1235401, 1235402, 1235498, 1235500, 1235502,
-    1235504, 1235505, 1235506, 1235507, 1235508, 1235509,
-    1235510, 1235526, 1235646, 1235659, 1235660, 1235661,
-    1235673, 1235704, 1235770, 1235777, 2635568
+    1235344, 1235555, 1235388, 1235682, 1235426, 1235686, 1235630, 1235561,
+    1235543, 1235622, 1235403, 1235569, 1235743, 2550412, 1446161, 2701517,
+    2336905, 1235639, 1235626, 1235522, 1235770, 1235767, 1235772, 1235660,
+    1235502, 1235505, 1235646, 1235659, 1235504, 1235506, 1235510, 1235590,
+    1235489, 1235508, 1235777, 1235400, 1235661, 1235507, 1235500, 1235509,
+    1235498, 1235401, 1235402, 1235610, 1235673, 1235526, 2635568, 1235345,
+    1235444, 1235564, 1235501, 1235704, 1235563, 1235428, 2822437, 1235598,
+    1235517, 2822784, 1235416, 1235503, 1235768, 1235769, 1235540
 ]
 
 # Collect the assets
@@ -49,54 +53,9 @@ for index, row in tqdm(df.iterrows(), total=len(df), desc="Processing assets", u
     # Get asset service records
     service_records = asset_service_records_api.asset_service_records_get_asset_service_records_by_asset(asset_id=row['asset_id'])  # noqa: E501
     latest_service_record = service_records[-1] if service_records else None
-    # document_list = asset_service_records_api.asset_service_records_document_list(  # noqa: E501
-    #     asset_service_record_id=latest_service_record.asset_service_record_id,
-    # )
-    # assert document_list == [], "Whoa! We have documents in the service record. This is not expected."  # noqa: E501
-    keepsies = latest_service_record.to_dict()
-
-    try:
-        service_order_items = service_order_items_api.service_order_items_get_work_items_0(  # noqa: E501
-            work_item_number=latest_service_record.certificate_number
-        )
-        if len(service_order_items) == 0:
-            raise Exception("No service order items found")
-        service_order_item = service_order_items[0]
-    except (rest.ApiException, Exception):
-        try:
-            service_order_items = service_order_items_api.service_order_items_get_work_items_0(  # noqa: E501
-                work_item_number=latest_service_record.custom_order_number
-            )
-            if len(service_order_items) == 1:
-                service_order_item = service_order_items[0]
-            else:
-                pass
-        except rest.ApiException as e:
-            print(f"Error: {e}")
-            continue
-
-    documents_list = service_order_documents_api.service_order_documents_get_documents_list(  # noqa: E501
-            service_order_id=service_order_item.service_order_id
-        )
-    excel_files = []
-    for document in documents_list:
-        if document.document_name.endswith(".xlsx"):
-            excel_files.append(document.document_name)
-    if excel_files:
-        pass
-    else:
-        work_item_documents = service_order_item_documents_api.service_order_item_documents_get_documents_list(  # noqa: E501
-                service_order_item_id=service_order_item.work_item_id
-            )
-        for document in work_item_documents:
-            if document.document_name.endswith(".xlsx"):
-                excel_files.append(document.document_name)
-    if excel_files:
-        pass
-    records.append(keepsies)
+    records.append(latest_service_record)
 
 records_df = pd.DataFrame([record.to_dict() for record in records])
-
 
 # Remove columns that are all None
 records_df = records_df.dropna(axis=1, how='all')
