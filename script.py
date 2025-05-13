@@ -1,12 +1,17 @@
+from pdf2image import convert_from_bytes
 from qualer_sdk import ApiClient, AssetsApi, AssetServiceRecordsApi
 from qualer_sdk import Configuration, ServiceOrderItemDocumentsApi
 from qualer_sdk import ServiceOrderItemsApi, ServiceOrderDocumentsApi
+from tqdm import tqdm
 import os
 import pandas as pd
-from tqdm import tqdm
+import pytesseract
+import re
 import sys
-tqdm_kwargs = {'file': sys.stdout}  # Ensure it flushes to visible console
+import time
+pytesseract.pytesseract.tesseract_cmd = r"C:/Program Files/Tesseract-OCR/tesseract.exe"  # noqa: E501
 
+start_time = time.time()
 
 token = os.environ.get('QUALER_API_KEY')
 print(f"Using token: {repr(token)}")
@@ -23,7 +28,7 @@ service_order_documents_api = ServiceOrderDocumentsApi(client)
 service_order_item_documents_api = ServiceOrderItemDocumentsApi(client)
 
 # List of asset IDs to collect
-asset_ids = [  # FIXME: Add High Temp wires (J, K, Ultra K, Ultra N)
+asset_ids = [
     1235344, 1235555, 1235388, 1235682, 1235426, 1235686, 1235630, 1235561,
     1235543, 1235622, 1235403, 1235569, 1235743, 2550412, 1446161, 2701517,
     2336905, 1235639, 1235626, 1235522, 1235770, 1235767, 1235772, 1235660,
@@ -45,23 +50,87 @@ assets_api.assets_clear_collected_assets([])
 df = pd.DataFrame([asset.to_dict() for asset in collected_assets])
 
 records = []
+tqdm_kwargs = {'file': sys.stdout}  # Ensure it flushes to visible console
 for index, row in tqdm(df.iterrows(), total=len(df), desc="Processing assets", unit="asset", **tqdm_kwargs):  # noqa: E501
-    tqdm.write(f"Asset ID: {row['asset_id']}, Name: {row['asset_name']}")
-
-    print(f"Asset ID: {row['asset_id']}, Name: {row['asset_name']}")
+    asset_id = row['asset_id']
+    tqdm.write(f"Asset ID: {asset_id}, Name: {row['asset_name']}")
 
     # Get asset service records
-    service_records = asset_service_records_api.asset_service_records_get_asset_service_records_by_asset(asset_id=row['asset_id'])  # noqa: E501
-    latest_service_record = service_records[-1] if service_records else None
-    records.append(latest_service_record)
+    service_records = asset_service_records_api.asset_service_records_get_asset_service_records_by_asset(asset_id=asset_id)  # noqa: E501
+    if not service_records:
+        tqdm.write(f"No service records found for asset ID: {asset_id}")
+        continue
+    latest_service_record = service_records[-1]
+    latest_service_record_date = latest_service_record.service_date
+    next_service_date = latest_service_record.next_service_date
+    custom_order_number = latest_service_record.custom_order_number
+    asset_service_record_id = latest_service_record.asset_service_record_id
+    service_order_items = service_order_items_api.service_order_items_get_work_items_0(  # noqa: E501
+        work_item_number=custom_order_number,
+    )
+    for item in service_order_items:
+        if item.asset_id == asset_id:
+            service_order_item = item
+            break
+    work_item_id = item.work_item_id
+    service_order_id = item.service_order_id
+    certificate_number = item.certificate_number
 
-records_df = pd.DataFrame([record.to_dict() for record in records])
+    order_documents = service_order_documents_api.service_order_documents_get_documents_list(  # noqa: E501
+        service_order_id=service_order_id,
+    )
+    certificate_document = None
+    for document in order_documents:
+        filename = document.document_name
+        if filename.startswith(row['asset_tag']) and filename.endswith('.pdf'):
+            certificate_document = document
+            break
 
-# Remove columns that are all None
-records_df = records_df.dropna(axis=1, how='all')
-# Remove columns that are have no variance
+    if not certificate_document:
+        tqdm.write(f"No certificate document found for asset ID: {asset_id}")
+        continue
 
-records_df = records_df.loc[:, (records_df != records_df.iloc[0]).any()]
+    cert_guid = certificate_document.guid
+
+    # This should now work without a UnicodeDecodeError
+    certificate_document_pdf = service_order_documents_api.service_order_documents_get_document(  # noqa: E501
+        guid=cert_guid, _preload_content=False
+    )
+    if not certificate_document_pdf:
+        tqdm.write(f"No PDF found for asset ID: {asset_id}")
+        continue
+
+    # Convert PDF (bytes) to image(s)
+    images = convert_from_bytes(certificate_document_pdf.data, dpi=300)
+
+    # OCR each page
+    pattern = r"The above expendable wireset was made from wire roll\s+(.*?)\.\s"  # noqa: E501
+
+    for i, img in enumerate(images):
+        text = pytesseract.image_to_string(img)
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            wire_roll_cert_number = match.group(1).strip()
+            tqdm.write(f"OCR match (page {i+1}): {wire_roll_cert_number}")
+            records.append({
+                "asset_id": asset_id,
+                "serial_number": row['serial_number'],
+                "asset_tag": row['asset_tag'],
+                "asset_service_record_id": asset_service_record_id,
+                "custom_order_number": custom_order_number,
+                "work_item_id": work_item_id,
+                "latest_service": latest_service_record_date,
+                "next_service_date": next_service_date,
+                "wire_roll_cert_number": wire_roll_cert_number
+            })
+            break
+
+df = pd.DataFrame(records)
+duration = time.time() - start_time
+m, s = divmod(duration, 60)
+print(f"Script completed in {int(m)} minutes and {int(s)} seconds.")
 
 # Save the DataFrame to a CSV file
-records_df.to_csv('service_records.csv', index=False)
+df.to_csv('wire_roll_cert_numbers.csv', index=False)
+
+pass
