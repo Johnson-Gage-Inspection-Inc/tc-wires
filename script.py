@@ -154,6 +154,13 @@ def perform_lookups():
         )
 
 
+def get_qualer_token():
+    url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/General/apikey.txt:/content"  # noqa: E501
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    return resp.text.strip()
+
+
 TENANT = os.environ["AZURE_TENANT_ID"]
 CLIENT_ID = os.environ["AZURE_CLIENT_ID"]
 CLIENT_SECRET = os.environ["AZURE_CLIENT_SECRET"]
@@ -175,18 +182,11 @@ headers = {"Authorization": f"Bearer {result['access_token']}"}
 tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
 pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
-
-token = os.environ.get('QUALER_API_KEY')
-if not token:
-    print("Please set the QUALER_API_KEY environment variable.")
-    sys.exit(1)
-
-print(f"Using token: {repr(token)}")
 config = Configuration()
 config.host = "https://jgiquality.qualer.com"
 
 client = ApiClient(configuration=config)
-client.default_headers["Authorization"] = f"Api-Token {token}"
+client.default_headers["Authorization"] = get_qualer_token()
 
 assets_api = AssetsApi(client)
 asset_service_records_api = AssetServiceRecordsApi(client)
