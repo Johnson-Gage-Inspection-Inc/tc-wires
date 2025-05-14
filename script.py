@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from pdf2image import convert_from_bytes
 from qualer_sdk import (
     ApiClient,
@@ -38,7 +39,13 @@ pytesseract.pytesseract.tesseract_cmd = tesseract_path
 start_time = time.time()
 output_path = 'wire_roll_cert_numbers.csv'
 
+load_dotenv()
+
 token = os.environ.get('QUALER_API_KEY')
+if not token:
+    print("Please set the QUALER_API_KEY environment variable.")
+    sys.exit(1)
+
 print(f"Using token: {repr(token)}")
 config = Configuration()
 config.host = "https://jgiquality.qualer.com"
@@ -53,7 +60,7 @@ service_order_documents_api = ServiceOrderDocumentsApi(client)
 service_order_item_documents_api = ServiceOrderItemDocumentsApi(client)
 
 # Load existing output if it exists
-existing_df = pd.read_csv(output_path, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
+existing_df = pd.read_csv(output_path, dtype={"asset_id": "Int64"}, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
 
 tqdm_kwargs = {'file': sys.stdout}
 
@@ -89,9 +96,7 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
 
     existing_df.at[idx, "serial_number"] = latest.serial_number
     existing_df.at[idx, "asset_tag"] = latest.asset_tag
-    existing_df.at[idx, "asset_service_record_id"] = int(latest.asset_service_record_id)  # noqa: E501
     existing_df.at[idx, "custom_order_number"] = latest.custom_order_number
-    existing_df.at[idx, "work_item_id"] = None
     existing_df.at[idx, "service_date"] = latest.service_date
     existing_df.at[idx, "next_service_date"] = latest.next_service_date
 
@@ -99,13 +104,14 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
     service_order_items = service_order_items_api.service_order_items_get_work_items_0(  # noqa: E501
         work_item_number=latest.custom_order_number,
     )
+    service_order_id = None
     for item in service_order_items:
         if int(item.asset_id) == asset_id:
-            existing_df.at[idx, "work_item_id"] = int(item.work_item_id)
             service_order_id = item.service_order_id
             existing_df.at[idx, 'certificate_number'] = item.certificate_number
             break
-    else:
+
+    if not service_order_id:
         tqdm.write(f"No matching service order item for asset ID: {asset_id}")
         existing_df.to_csv(output_path, index=False)
         continue
