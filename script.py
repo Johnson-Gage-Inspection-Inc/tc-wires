@@ -68,7 +68,6 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
     asset_id = row.get("asset_id")
     if pd.isna(asset_id):
         continue
-    asset_id = int(asset_id)
 
     # Get latest service record
     service_records = asset_service_records_api.asset_service_records_get_asset_service_records_by_asset(asset_id=asset_id)  # noqa: E501
@@ -104,7 +103,7 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
     )
     service_order_id = None
     for item in service_order_items:
-        if int(item.asset_id) == asset_id:
+        if int(item.asset_id) == int(asset_id):
             service_order_id = item.service_order_id
             existing_df.at[idx, 'certificate_number'] = item.certificate_number
             break
