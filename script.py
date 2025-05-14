@@ -53,7 +53,8 @@ service_order_documents_api = ServiceOrderDocumentsApi(client)
 service_order_item_documents_api = ServiceOrderItemDocumentsApi(client)
 
 # Load existing output if it exists
-existing_df = pd.read_csv(output_path, dtype=str, parse_dates=['service_date'])
+existing_df = pd.read_csv(output_path, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
+
 tqdm_kwargs = {'file': sys.stdout}
 
 for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Processing assets", **tqdm_kwargs):  # noqa: E501
@@ -70,21 +71,17 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
 
     latest = service_records[-1]
 
-    if latest.asset_tag != row.get("asset_tag"):
+    if str(latest.asset_tag) != row.get("asset_tag"):
         tqdm.write(f"Asset tag mismatch for asset ID: {asset_id}")
         continue
 
-    if latest.serial_number != row.get("serial_number"):
+    if str(latest.serial_number) != row.get("serial_number"):
         tqdm.write(f"Serial Number mismatch for asset ID: {asset_id}")
         continue
 
-    new_date = pd.to_datetime(latest.service_date)
-
     # Check against existing data
-    existing_date = row.get("service_date")
-    if existing_date is not None:
-        existing_date = pd.to_datetime(existing_date, errors='coerce')
-    if pd.notna(existing_date) and existing_date == new_date:
+    existing_date = row["service_date"]  # already a Timestamp or NaT
+    if pd.notna(existing_date) and existing_date == latest.service_date:
         continue  # skip unchanged
 
     # Clear wire_roll_cert_number
@@ -95,7 +92,7 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
     existing_df.at[idx, "asset_service_record_id"] = int(latest.asset_service_record_id)  # noqa: E501
     existing_df.at[idx, "custom_order_number"] = latest.custom_order_number
     existing_df.at[idx, "work_item_id"] = None
-    existing_df.at[idx, "service_date"] = new_date
+    existing_df.at[idx, "service_date"] = latest.service_date
     existing_df.at[idx, "next_service_date"] = latest.next_service_date
 
     # Find related service order item
@@ -110,6 +107,7 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
             break
     else:
         tqdm.write(f"No matching service order item for asset ID: {asset_id}")
+        existing_df.to_csv(output_path, index=False)
         continue
 
     # Find certificate document
