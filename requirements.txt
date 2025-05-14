@@ -5,6 +5,5 @@ msal
 openpyxl
 pandas
 pdf2image
-pdf2image
 pytesseract
 tqdm
