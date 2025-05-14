@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from io import BytesIO
 from pdf2image import convert_from_bytes
 from qualer_sdk import (
     ApiClient,
@@ -16,6 +17,28 @@ import pytesseract
 import re
 import sys
 import time
+import requests
+from msal import ConfidentialClientApplication
+
+load_dotenv()
+
+TENANT = os.environ["AZURE_TENANT_ID"]
+CLIENT_ID = os.environ["AZURE_CLIENT_ID"]
+CLIENT_SECRET = os.environ["AZURE_CLIENT_SECRET"]
+DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]  # Should match the one for Pyro
+
+authority = f"https://login.microsoftonline.com/{TENANT}"
+scope = ["https://graph.microsoft.com/.default"]
+
+app = ConfidentialClientApplication(
+    client_id=CLIENT_ID,
+    client_credential=CLIENT_SECRET,
+    authority=authority,
+)
+result = app.acquire_token_for_client(scopes=scope)
+if "access_token" not in result:
+    raise Exception(f"Failed to acquire token: {result.get('error_description')}")  # noqa: E501
+headers = {"Authorization": f"Bearer {result['access_token']}"}
 
 
 def retrieve_wire_roll_cert_number(cert_guid):
@@ -37,9 +60,6 @@ tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
 pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 start_time = time.time()
-output_path = 'wire_roll_cert_numbers.csv'
-
-load_dotenv()
 
 token = os.environ.get('QUALER_API_KEY')
 if not token:
@@ -60,7 +80,11 @@ service_order_documents_api = ServiceOrderDocumentsApi(client)
 service_order_item_documents_api = ServiceOrderItemDocumentsApi(client)
 
 # Load existing output if it exists
-existing_df = pd.read_csv(output_path, dtype={"asset_id": "Int64"}, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
+download_url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/Pyro/WireSetCerts.xlsx:/content"  # noqa: E501
+resp = requests.get(download_url, headers=headers)
+resp.raise_for_status()
+
+existing_df = pd.read_excel(BytesIO(resp.content), dtype={"asset_id": "Int64"}, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
 
 tqdm_kwargs = {'file': sys.stdout}
 
@@ -83,14 +107,11 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
     if str(latest.serial_number) != row.get("serial_number"):
         tqdm.write(f"Serial Number mismatch for asset ID: {asset_id}. Overwriting.")  # noqa: E501
 
-    # Check against existing data
-    existing_date = row["service_date"]  # already a Timestamp or NaT
+    existing_date = row["service_date"]
     if pd.notna(existing_date) and existing_date == latest.service_date:
-        continue  # skip unchanged
+        continue
 
-    # Clear wire_roll_cert_number
     existing_df.at[idx, "wire_roll_cert_number"] = None
-
     existing_df.at[idx, "serial_number"] = latest.serial_number
     existing_df.at[idx, "asset_tag"] = latest.asset_tag
     existing_df.at[idx, "custom_order_number"] = latest.custom_order_number
@@ -110,7 +131,6 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
 
     if not service_order_id:
         tqdm.write(f"No matching service order item for asset ID: {asset_id}")
-        existing_df.to_csv(output_path, index=False)
         continue
 
     # Find certificate document
@@ -126,7 +146,15 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
         existing_df.at[idx, 'wire_roll_cert_number'] = retrieve_wire_roll_cert_number(certificate_document.guid)  # noqa: E501
     else:
         tqdm.write(f"No certificate document found for asset ID: {asset_id}")
-    existing_df.to_csv(output_path, index=False)
+
+buffer = BytesIO()
+existing_df.to_excel(buffer, index=False)
+buffer.seek(0)
+
+upload_url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/Pyro/WireSetCerts.xlsx:/content"  # noqa: E501
+upload_resp = requests.put(upload_url, headers=headers, data=buffer)
+upload_resp.raise_for_status()
+
 
 duration = time.time() - start_time
 m, s = divmod(duration, 60)
