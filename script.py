@@ -79,12 +79,10 @@ for idx, row in tqdm(existing_df.iterrows(), total=len(existing_df), desc="Proce
     latest = service_records[-1]
 
     if str(latest.asset_tag) != row.get("asset_tag"):
-        tqdm.write(f"Asset tag mismatch for asset ID: {asset_id}")
-        continue
+        tqdm.write(f"Asset tag mismatch for asset ID: {asset_id}. Overwriting.")  # noqa: E501
 
     if str(latest.serial_number) != row.get("serial_number"):
-        tqdm.write(f"Serial Number mismatch for asset ID: {asset_id}")
-        continue
+        tqdm.write(f"Serial Number mismatch for asset ID: {asset_id}. Overwriting.")  # noqa: E501
 
     # Check against existing data
     existing_date = row["service_date"]  # already a Timestamp or NaT
