@@ -8,7 +8,6 @@ from qualer_sdk import (
     AssetsApi,
     AssetServiceRecordsApi,
     Configuration,
-    ServiceOrderItemDocumentsApi,
     ServiceOrderItemsApi,
     ServiceOrderDocumentsApi,
 )
@@ -39,7 +38,7 @@ def hash_df(df):
 
 
 def retrieve_wire_roll_cert_number(cert_guid):
-    certificate_document_pdf = service_order_documents_api.service_order_documents_get_document(  # noqa: E501
+    certificate_document_pdf = SOD_api.service_order_documents_get_document(  # noqa: E501
         guid=cert_guid, _preload_content=False
         )
     if not certificate_document_pdf:
@@ -87,8 +86,9 @@ def perform_lookups():
         if pd.isna(asset_id):
             continue
 
-    # Get latest service record
-        service_records = asset_service_records_api.asset_service_records_get_asset_service_records_by_asset(asset_id=asset_id)  # noqa: E501
+        # Get latest service record
+        ASR_api = AssetServiceRecordsApi(client)
+        service_records = ASR_api.asset_service_records_get_asset_service_records_by_asset(asset_id=asset_id)  # noqa: E501
         if not service_records:
             tqdm.write(f"No service records found for asset ID: {asset_id}")
             continue
@@ -112,8 +112,9 @@ def perform_lookups():
         existing_df.at[idx, "service_date"] = latest.service_date
         existing_df.at[idx, "next_service_date"] = latest.next_service_date
 
-    # Find related service order item
-        service_order_items = service_order_items_api.service_order_items_get_work_items_0(  # noqa: E501
+        # Find related service order item
+        SOI_api = ServiceOrderItemsApi(client)
+        service_order_items = SOI_api.service_order_items_get_work_items_0(
             work_item_number=latest.custom_order_number,
         )
         service_order_id = None
@@ -124,15 +125,18 @@ def perform_lookups():
                 break
 
         if not service_order_id:
-            tqdm.write(f"No matching service order item for asset ID: {asset_id}")  # noqa: E501
+            tqdm.write(f"No matching work item for asset ID: {asset_id}")
             continue
 
-    # Find certificate document
-        order_documents = service_order_documents_api.service_order_documents_get_documents_list(service_order_id=service_order_id)  # noqa: E501
+        # Find certificate document
+        order_documents = SOD_api.service_order_documents_get_documents_list(
+            service_order_id=service_order_id
+            )
         certificate_document = None
         for document in order_documents:
             prefix = latest.asset_tag.replace(" ", "")
-            if document.document_name.startswith(prefix) and document.document_name.endswith('.pdf'):  # noqa: E501
+            if (document.document_name.startswith(prefix)
+                    and document.document_name.endswith('.pdf')):
                 certificate_document = document
                 break
 
@@ -161,41 +165,40 @@ def get_qualer_token():
     return resp.text.strip()
 
 
-TENANT = os.environ["AZURE_TENANT_ID"]
-CLIENT_ID = os.environ["AZURE_CLIENT_ID"]
-CLIENT_SECRET = os.environ["AZURE_CLIENT_SECRET"]
-DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
-
-authority = f"https://login.microsoftonline.com/{TENANT}"
-scope = ["https://graph.microsoft.com/.default"]
-
-app = ConfidentialClientApplication(
-    client_id=CLIENT_ID,
-    client_credential=CLIENT_SECRET,
-    authority=authority,
-    )
-result = app.acquire_token_for_client(scopes=scope)
-if "access_token" not in result:
-    raise Exception(f"Failed to acquire token: {result.get('error_description')}")  # noqa: E501
-headers = {"Authorization": f"Bearer {result['access_token']}"}
-
-tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
-pytesseract.pytesseract.tesseract_cmd = tesseract_path
-
-config = Configuration()
-config.host = "https://jgiquality.qualer.com"
-
-client = ApiClient(configuration=config)
-client.default_headers["Authorization"] = get_qualer_token()
-
-assets_api = AssetsApi(client)
-asset_service_records_api = AssetServiceRecordsApi(client)
-service_order_items_api = ServiceOrderItemsApi(client)
-service_order_documents_api = ServiceOrderDocumentsApi(client)
-service_order_item_documents_api = ServiceOrderItemDocumentsApi(client)
+def acquire_azure_access_token():
+    TENANT = os.environ["AZURE_TENANT_ID"]
+    app = ConfidentialClientApplication(
+        client_id=os.environ["AZURE_CLIENT_ID"],
+        client_credential=os.environ["AZURE_CLIENT_SECRET"],
+        authority=f"https://login.microsoftonline.com/{TENANT}",
+        )
+    result = app.acquire_token_for_client(scopes=[
+        "https://graph.microsoft.com/.default",
+    ])
+    if "access_token" not in result:
+        error_description = result.get('error_description')
+        raise Exception(f"Failed to acquire token: {error_description}")
+    return result['access_token']
 
 
 if __name__ == "__main__":
+    DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
+
+    azure_token = acquire_azure_access_token()
+    headers = {"Authorization": f"Bearer {azure_token}"}
+
+    tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+
+    config = Configuration()
+    config.host = "https://jgiquality.qualer.com"
+
+    client = ApiClient(configuration=config)
+    client.default_headers["Authorization"] = get_qualer_token()
+
+    assets_api = AssetsApi(client)
+    SOD_api = ServiceOrderDocumentsApi(client)
+
     # Loop until 5 PM
     while time.localtime().tm_hour < 17:
         current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
