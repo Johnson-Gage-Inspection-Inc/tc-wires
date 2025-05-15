@@ -6,7 +6,7 @@ This script automates the association of **TC wire sets** with the **wire roll**
 
 This script will do its best to associate wire sets with their wire rolls. However, this system is inherently fragile, as it relies on several underlying assumptions:
 
-+ All wire sets are present in [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/sites/JGI/Shared%20Documents/Pyro/WireSetCerts.xlsx).
++ All wire sets are present in [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/:x:/s/JGI/Ed0TEK1rlx9EjiIk6tqYX7cBeNrpNLL4JyOxY30ts-qnZA?e=eeKWFF).
 + Wire set certificates are saved to the Service Order on Qualer (⚠️ Not the Work Item).
 + Wire set certificates are saved in `.pdf` format.
 + Wire set certificates' filenames begin with their Asset Tag, as it appears in Qualer.
@@ -15,11 +15,11 @@ This script will do its best to associate wire sets with their wire rolls. Howev
 + Wire roll certificates are named according to the `{SerialNumber}.xls` convention (e.g., `011391A.xls`).
 + Wire roll certificates are stored at [Pyro_Standards](https://jgiquality.sharepoint.com/sites/JGI/Shared%20Documents/Pyro/Pyro_Standards/).
 
-_If any one of these assumptions is violated, it is the responsibility of the Pyrometry department to **manually** update [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/sites/JGI/Shared%20Documents/Pyro/WireSetCerts.xlsx) with the Wire Roll serial number whenever a new Wire Set is certified._
+_If any one of these assumptions is violated, it is the responsibility of the Pyrometry department to **manually** update [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/:x:/s/JGI/Ed0TEK1rlx9EjiIk6tqYX7cBeNrpNLL4JyOxY30ts-qnZA?e=eeKWFF) with the Wire Roll serial number whenever a new Wire Set is certified._
 
 ### Manual Update Instructions
 
-1. Open [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/sites/JGI/Shared%20Documents/Pyro/WireSetCerts.xlsx) in Excel.
+1. Open [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/:x:/s/JGI/Ed0TEK1rlx9EjiIk6tqYX7cBeNrpNLL4JyOxY30ts-qnZA?e=eeKWFF) in Excel.
 2. Locate the row corresponding to the wire set.
 3. Enter the correct wire roll serial number in the appropriate column.
 4. Save the file and ensure it is uploaded back to SharePoint.
