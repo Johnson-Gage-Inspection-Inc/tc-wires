@@ -1,6 +1,5 @@
 dotenv
 git+https://github.com/Johnson-Gage-Inspection-Inc/qualer-sdk-python.git@c948da4#egg=qualer_sdk
-git+https://github.com/vgrem/Office365-REST-Python-Client.git@2a778c5#egg=office365
 msal
 openpyxl
 pandas
