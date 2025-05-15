@@ -135,7 +135,7 @@ pytesseract
 tqdm
 ```
 
-Ensure Tesseract and Poppler binaries are installed and available in your system path.
+**Important** Ensure [Tesseract](https://github.com/tesseract-ocr/tesseract) and [Poppler](https://github.com/oschwartz10612/poppler-windows/releases) binaries are installed and available in your system path.
 `tesseract.exe` must be located at exactly "C:/Program Files/Tesseract-OCR/tesseract.exe"
 
 ---
