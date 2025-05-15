@@ -1,5 +1,13 @@
 # Wire Set Certificate Processing Script
 
+![Last Updated](https://img.shields.io/badge/last%20updated-May%202024-informational)
+![Status](https://img.shields.io/badge/status-production-brightgreen)
+![Platform](https://img.shields.io/badge/platform-Windows-blue)
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![OCR](https://img.shields.io/badge/OCR-Tesseract-lightgrey)
+![Schedule](https://img.shields.io/badge/schedule-10min%20loop%205AM--5PM-blueviolet)
+
+
 This script automates the association of **TC wire sets** with the **wire roll** they were made from, by reading each set's calibration certificate (PDF) and extracting the wire roll serial number using OCR. It interacts with the **Qualer SDK**, and **SharePoint** via the **Microsoft Graph API** to fetch and update data.
 
 ## Instructions for Pyrometry Inspectors
@@ -56,6 +64,7 @@ _If any one of these assumptions is violated, it is the responsibility of the Py
   * Microsoft Azure AD App credentials (client ID, secret, tenant ID).
   * Qualer API.
   * JGI's SharePoint site.
+  * Host Server (Currently the **QualerCalSync** VM on `JGI-HV-11`)
 
 ---
 
