@@ -125,17 +125,18 @@ Logs are written to stdout using Python's `logging` module. Each run logs:
 ## 📚 Dependencies
 
 ```txt
-pandas
-requests
-tqdm
-pytesseract
-pdf2image
-python-dotenv
+dotenv
+git+https://github.com/Johnson-Gage-Inspection-Inc/qualer-sdk-python.git@main#egg=qualer_sdk
 msal
-qualer-sdk  # Local or private module
+openpyxl
+pandas
+pdf2image
+pytesseract
+tqdm
 ```
 
 Ensure Tesseract and Poppler binaries are installed and available in your system path.
+`tesseract.exe` must be located at exactly "C:/Program Files/Tesseract-OCR/tesseract.exe"
 
 ---
 
