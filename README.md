@@ -192,9 +192,3 @@ For support or feedback, contact:
 This project is licensed under the MIT License. See `LICENSE` for details.
 
 ```
-
-Let me know if you'd like to include:
-- A `requirements.txt` scaffold
-- Example output logs
-- Screenshots of SharePoint integration or OCR results
-```
