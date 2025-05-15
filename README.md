@@ -74,10 +74,11 @@ pip install -r requirements.txt
 Create a `.env` file in the root directory with:
 
 ```env
-AZURE_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+AZURE_CLIENT_ID=f0fc42a5-125f-4eed-ae6c-5b58ab9c0971
 AZURE_CLIENT_SECRET=your-app-secret
-AZURE_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-SHAREPOINT_DRIVE_ID=b!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # Documents library drive ID
+AZURE_TENANT_ID=9def3ae4-854a-4465-952c-5693835965d9
+SHAREPOINT_DRIVE_ID=b!34PQK-JF0EmH57ieExSqveCp2B5j30NMsNTGcMEXae_5x8SnfJhdR6JqUh5dD03F
+SHAREPOINT_SITE_ID=jgiquality.sharepoint.com,b8d7ad55-622f-41e1-9140-35b87b4616f9,160cda33-41a0-4b31-8ebf-11196986b3e3
 ```
 
 > 💡 The Qualer API key is not stored here — it's securely fetched from `/General/apikey.txt` on SharePoint.
