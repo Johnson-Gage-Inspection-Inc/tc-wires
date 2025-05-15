@@ -135,8 +135,18 @@ pytesseract
 tqdm
 ```
 
-**Important** Ensure [Tesseract](https://github.com/tesseract-ocr/tesseract) and [Poppler](https://github.com/oschwartz10612/poppler-windows/releases) binaries are installed and available in your system path.
-`tesseract.exe` must be located at exactly "C:/Program Files/Tesseract-OCR/tesseract.exe"
+**Important**
+Ensure [Tesseract](https://github.com/tesseract-ocr/tesseract), [Poppler](https://github.com/oschwartz10612/poppler-windows/releases),
+and the [Microsoft VC++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) are installed and available in your system path.
+
+
+## 🧰 Troubleshooting
+
+If you encounter runtime errors related to `pdftoppm`, install the following:
+
+- [Poppler for Windows](https://github.com/oschwartz10612/poppler-windows/releases)
+- [Microsoft VC++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
 
 ---
 
