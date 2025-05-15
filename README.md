@@ -6,14 +6,14 @@ This script automates the association of **TC wire sets** with the **wire roll**
 
 This script will do its best to associate wire sets with their wire rolls. However, this system is inherently fragile, as it relies on several underlying assumptions:
 
-+ All wire sets are present in [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/:x:/s/JGI/Ed0TEK1rlx9EjiIk6tqYX7cBeNrpNLL4JyOxY30ts-qnZA?e=eeKWFF).
-+ Wire set certificates are saved to the Service Order on Qualer (⚠️ Not the Work Item).
-+ Wire set certificates are saved in `.pdf` format.
-+ Wire set certificates' filenames begin with their Asset Tag, as it appears in Qualer.
-+ Wire set certificates contain the wire roll serial number directly between "The above expendable wireset was made from wire roll " and the following ". ".
-+ The OCR process is able to correctly identify the serial number according to the previous assumption.
-+ Wire roll certificates are named according to the `{SerialNumber}.xls` convention (e.g., `011391A.xls`).
-+ Wire roll certificates are stored at [Pyro_Standards](https://jgiquality.sharepoint.com/sites/JGI/Shared%20Documents/Pyro/Pyro_Standards/).
+* All wire sets are present in [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/:x:/s/JGI/Ed0TEK1rlx9EjiIk6tqYX7cBeNrpNLL4JyOxY30ts-qnZA?e=eeKWFF).
+* Wire set certificates are saved to the Service Order on Qualer (⚠️ Not the Work Item).
+* Wire set certificates are saved in `.pdf` format.
+* Wire set certificates' filenames begin with their Asset Tag, as it appears in Qualer.
+* Wire set certificates contain the wire roll serial number directly between "The above expendable wireset was made from wire roll " and the following ". ".
+* The OCR process is able to correctly identify the serial number according to the previous assumption.
+* Wire roll certificates are named according to the `{SerialNumber}.xls` convention (e.g., `011391A.xls`).
+* Wire roll certificates are stored at [Pyro_Standards](https://jgiquality.sharepoint.com/sites/JGI/Shared%20Documents/Pyro/Pyro_Standards/).
 
 _If any one of these assumptions is violated, it is the responsibility of the Pyrometry department to **manually** update [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/:x:/s/JGI/Ed0TEK1rlx9EjiIk6tqYX7cBeNrpNLL4JyOxY30ts-qnZA?e=eeKWFF) with the Wire Roll serial number whenever a new Wire Set is certified._
 
@@ -32,24 +32,25 @@ _If any one of these assumptions is violated, it is the responsibility of the Py
 
 ## 🚀 Features
 
-- 🧠 **Smart Lookups**: Pulls the latest Qualer service record for each wire set and locates the matching certificate document.
-- 🧾 **OCR Extraction**: Converts PDFs to images and uses Tesseract to find the wire roll serial number within the certificate.
-- 📊 **Excel Updating**: Updates the SharePoint-hosted `WireSetCerts.xlsx` file with extracted data.
-- ☁️ **Integrated with SharePoint & Graph API**: Downloads the Excel file and uploads it back only if changes are detected.
-- 🔐 **Secure Token Handling**: Pulls the Qualer API token from a protected `apikey.txt` file in SharePoint.
-- 🔁 **Scheduled Execution**: Intended to run every 10 minutes from **5:00 AM to 5:00 PM**, Monday through Saturday.
-- 🪵 **Detailed Logging**: Logs all steps and errors with timestamps using Python's `logging` module.
+* 🧠 **Smart Lookups**: Pulls the latest Qualer service record for each wire set and locates the matching certificate document.
+* 📟 **OCR Extraction**: Converts PDFs to images and uses Tesseract to find the wire roll serial number within the certificate.
+* 📊 **Excel Updating**: Updates the SharePoint-hosted `WireSetCerts.xlsx` file with extracted data.
+* ☁️ **Integrated with SharePoint & Graph API**: Downloads the Excel file and uploads it back only if changes are detected.
+* 🔐 **Secure Token Handling**: Pulls the Qualer API token from a protected `apikey.txt` file in SharePoint.
+* 🔀 **Scheduled Execution**: Intended to run every 10 minutes from **5:00 AM to 5:00 PM**, Monday through Saturday.
+* 🩵 **Detailed Logging**: Logs all steps and errors with timestamps using Python's `logging` module.
 
 ---
 
 ## 🧱 Prerequisites
 
-- Python 3.8+
-- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) (installed locally).
-- Access to:
-  - Microsoft Azure AD App credentials (client ID, secret, tenant ID).
-  - Qualer API.
-  - JGI's SharePoint site.
+* Python 3.8+
+* [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) (installed locally).
+* Access to:
+
+  * Microsoft Azure AD App credentials (client ID, secret, tenant ID).
+  * Qualer API.
+  * JGI's SharePoint site.
 
 ---
 
@@ -59,7 +60,7 @@ _If any one of these assumptions is violated, it is the responsibility of the Py
 git clone https://github.com/your-org/tc-wires.git
 cd tc-wires
 pip install -r requirements.txt
-````
+```
 
 ---
 
@@ -78,7 +79,7 @@ SHAREPOINT_DRIVE_ID=b!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # Documents library
 
 ---
 
-## 🛠 Usage
+## 🛠️ Usage
 
 ```bash
 python script.py
@@ -107,11 +108,11 @@ You can schedule it using:
 * `cron` (Linux).
 * A cloud scheduler (GitHub Actions, Azure Functions, etc.).
 
-> **Clarification**: The script is designed to run every 10 minutes, but it will only attempt to update the Excel file if changes are detected. If no changes are found, the script will exit without making any updates.
+> **Clarification**: The script includes an internal loop. It should only be scheduled **once at 5:00 AM**, and will continue running every 10 minutes until 5:00 PM.  It will only attempt to update the Excel file if changes are detected. If no changes are found, the script will exit without making any updates.
 
 ---
 
-## 📑 Logging
+## 📁 Logging
 
 Logs are written to stdout using Python's `logging` module. Each run logs:
 
@@ -126,7 +127,7 @@ Logs are written to stdout using Python's `logging` module. Each run logs:
 
 ```txt
 dotenv
-git+https://github.com/Johnson-Gage-Inspection-Inc/qualer-sdk-python.git@main#egg=qualer_sdk
+git+https://github.com/Johnson-Gage-Inspection-Inc/qualer-sdk-python.git@c948da4#egg=qualer_sdk
 msal
 openpyxl
 pandas
@@ -139,14 +140,12 @@ tqdm
 Ensure [Tesseract](https://github.com/tesseract-ocr/tesseract), [Poppler](https://github.com/oschwartz10612/poppler-windows/releases),
 and the [Microsoft VC++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) are installed and available in your system path.
 
-
 ## 🧰 Troubleshooting
 
 If you encounter runtime errors related to `pdftoppm`, install the following:
 
-- [Poppler for Windows](https://github.com/oschwartz10612/poppler-windows/releases)
-- [Microsoft VC++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-
+* [Poppler for Windows](https://github.com/oschwartz10612/poppler-windows/releases)
+* [Microsoft VC++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 
 ---
 
@@ -190,5 +189,3 @@ For support or feedback, contact:
 ## 📝 License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
-
-```
