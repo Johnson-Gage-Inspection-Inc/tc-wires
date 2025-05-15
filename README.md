@@ -14,6 +14,11 @@ This script will do its best to associate wire sets with their wire rolls. Howev
 * The OCR process is able to correctly identify the serial number according to the previous assumption.
 * Wire roll certificates are named according to the `{SerialNumber}.xls` convention (e.g., `011391A.xls`).
 * Wire roll certificates are stored at [Pyro_Standards](https://jgiquality.sharepoint.com/sites/JGI/Shared%20Documents/Pyro/Pyro_Standards/).
+* The SharePoint file (`WireSetCerts.xlsx`) is **not open or locked** during the upload attempt.
+  ⚠️ If someone is editing the file in Excel (desktop or browser), SharePoint may return a **423 Locked** error and prevent the script from uploading. The script will silently retry on the next cycle.
+
+
+> 💡 *Try to avoid keeping the file open in Excel for more than a few minutes during work hours.*
 
 _If any one of these assumptions is violated, it is the responsibility of the Pyrometry department to **manually** update [WireSetCerts.xlsx](https://jgiquality.sharepoint.com/:x:/s/JGI/Ed0TEK1rlx9EjiIk6tqYX7cBeNrpNLL4JyOxY30ts-qnZA?e=eeKWFF) with the Wire Roll serial number whenever a new Wire Set is certified._
 
