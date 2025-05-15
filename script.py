@@ -23,9 +23,16 @@ import time
 
 load_dotenv()
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+# Set up logging to log to a file
+log_file_path = os.path.join(os.getcwd(), 'tc-wires.log')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file_path),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 # DEBUG log the working directory
 logging.debug(f"Current working directory: {os.getcwd()}")
