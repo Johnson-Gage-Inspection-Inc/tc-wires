@@ -22,6 +22,9 @@ import time
 
 load_dotenv()
 
+DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
+DRIVE = f'https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/'
+
 # Set up logging to log to a file
 log_file_path = os.path.join(os.getcwd(), 'tc-wires.log')
 logging.basicConfig(
@@ -209,8 +212,6 @@ def acquire_azure_access_token():
 
 
 if __name__ == "__main__":
-    DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
-    DRIVE = f'https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/'
 
     tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
