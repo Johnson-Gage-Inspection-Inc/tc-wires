@@ -5,7 +5,6 @@ from pdf2image import convert_from_bytes
 from tqdm import tqdm
 from qualer_sdk import (
     ApiClient,
-    AssetsApi,
     AssetServiceRecordsApi,
     Configuration,
     ServiceOrderItemsApi,
@@ -222,7 +221,6 @@ if __name__ == "__main__":
     client = ApiClient(configuration=config)
     client.default_headers["Authorization"] = get_qualer_token()
 
-    assets_api = AssetsApi(client)
     SOD_api = ServiceOrderDocumentsApi(client)
 
     # Loop until 5 PM
