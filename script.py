@@ -121,10 +121,10 @@ def perform_lookups():
         latest = service_records[-1]
 
         if str(latest.asset_tag) != row.get("asset_tag"):
-            tqdm.write(f"Asset tag mismatch for asset ID: {asset_id}. Overwriting.")  # noqa: E501
+            tqdm.write(f"Overwriting Asset tag for asset ID: {asset_id}.")
 
         if str(latest.serial_number) != row.get("serial_number"):
-            tqdm.write(f"Serial Number mismatch for asset ID: {asset_id}. Overwriting.")  # noqa: E501
+            tqdm.write(f"Overwriting Serial Number for asset ID: {asset_id}.")
 
         existing_date = row["service_date"]
         if pd.notna(existing_date) and existing_date == latest.service_date:
