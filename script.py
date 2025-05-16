@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 from io import BytesIO
 from msal import ConfidentialClientApplication
 from pdf2image import convert_from_bytes
+from pytesseract import pytesseract, image_to_string
 from tqdm import tqdm
 from qualer_sdk import (
     ApiClient,
@@ -14,7 +15,6 @@ import hashlib
 import logging
 import os
 import pandas as pd
-import pytesseract
 import re
 import requests
 import sys
@@ -24,6 +24,7 @@ load_dotenv()
 
 DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
 DRIVE = f'https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/'
+
 
 def initialize_logging():
     """Set up logging to log to a file"""
@@ -56,7 +57,7 @@ def retrieve_wire_roll_cert_number(cert_guid):
     images = convert_from_bytes(certificate_document_pdf.data, dpi=300)
     pattern = r"The above expendable wireset was made from wire roll\s+(.*?)\.\s"  # noqa: E501
     for i, img in enumerate(images):
-        text = pytesseract.image_to_string(img)
+        text = image_to_string(img)
         if match := re.search(pattern, text, re.IGNORECASE | re.DOTALL):
             return match.group(1).strip()
 
@@ -214,7 +215,7 @@ def acquire_azure_access_token():
 if __name__ == "__main__":
     initialize_logging()
     tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
-    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    pytesseract.tesseract_cmd = tesseract_path
 
     config = Configuration()
     config.host = "https://jgiquality.qualer.com"
