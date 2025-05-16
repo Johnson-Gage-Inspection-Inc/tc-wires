@@ -59,7 +59,7 @@ def retrieve_wire_roll_cert_number(cert_guid):
             return match.group(1).strip()
 
 
-def save_to_sharepoint(df, h):
+def save_to_sharepoint(df, head):
     buffer = BytesIO()
     df.to_excel(buffer, index=False)
 
@@ -70,8 +70,8 @@ def save_to_sharepoint(df, h):
     while attempts < max_attempts:
         attempts += 1
         try:
-            buffer.seek(0)  # Reset buffer pointer before each retry
-            upload_resp = requests.put(upload_url, headers=h, data=buffer)
+            buffer.seek(0)
+            upload_resp = requests.put(upload_url, headers=head, data=buffer)
             upload_resp.raise_for_status()
         except requests.exceptions.RequestException as e:
             logging.error(f"Error uploading file: {e}")
