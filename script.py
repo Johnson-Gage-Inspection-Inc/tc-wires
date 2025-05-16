@@ -62,8 +62,8 @@ def retrieve_wire_roll_SN(SOD_api, cert_guid):
     Retrieve the serial number of a wire roll from a certificate document.
 
     Parameters:
-        SOD_api (ServiceOrderDocumentsApi): An instance of the ServiceOrderDocumentsApi
-            used to interact with service order documents.
+        SOD_api (ServiceOrderDocumentsApi): An instance of the API used to
+            interact with service order documents.
         cert_guid (str): The GUID of the certificate document to retrieve.
 
     Returns:
@@ -80,10 +80,10 @@ def retrieve_wire_roll_SN(SOD_api, cert_guid):
         raise ValueError(f"Failed to retrieve document with GUID: {cert_guid}")
 
     images = convert_from_bytes(certificate_document_pdf.data, dpi=300)
-    pattern = r"The above expendable wireset was made from wire roll\s+(.*?)\.\s"  # noqa: E501
+    patn = r"The above expendable wireset was made from wire roll\s+(.*?)\.\s"
     for i, img in enumerate(images):
         text = image_to_string(img)
-        if match := re.search(pattern, text, re.IGNORECASE | re.DOTALL):
+        if match := re.search(patn, text, re.IGNORECASE | re.DOTALL):
             return match.group(1).strip()
 
 
@@ -127,7 +127,11 @@ def perform_lookups(client):
     resp = requests.get(download_url, headers=headers)
     resp.raise_for_status()
 
-    df = pd.read_excel(BytesIO(resp.content), dtype={"asset_id": "Int64"}, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
+    df = pd.read_excel(
+        BytesIO(resp.content),
+        dtype={"asset_id": "Int64"},
+        parse_dates=['service_date', 'next_service_date']
+        )
 
     before_hash = hash_df(df.copy())
 
