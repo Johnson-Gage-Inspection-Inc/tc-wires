@@ -25,19 +25,19 @@ load_dotenv()
 DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
 DRIVE = f'https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/'
 
-# Set up logging to log to a file
-log_file_path = os.path.join(os.getcwd(), 'tc-wires.log')
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file_path),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+def initialize_logging():
+    """Set up logging to log to a file"""
+    log_file_path = os.path.join(os.getcwd(), 'tc-wires.log')
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_path),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
 
-# DEBUG log the working directory
-logging.debug(f"Current working directory: {os.getcwd()}")
+    logging.debug(f"Current working directory: {os.getcwd()}")
 
 
 def hash_df(df):
@@ -212,7 +212,7 @@ def acquire_azure_access_token():
 
 
 if __name__ == "__main__":
-
+    initialize_logging()
     tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
