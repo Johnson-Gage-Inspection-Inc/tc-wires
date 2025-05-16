@@ -2,10 +2,10 @@ from dotenv import load_dotenv
 from io import BytesIO
 from msal import ConfidentialClientApplication
 from pdf2image import convert_from_bytes
+from pytesseract import pytesseract, image_to_string
 from tqdm import tqdm
 from qualer_sdk import (
     ApiClient,
-    AssetsApi,
     AssetServiceRecordsApi,
     Configuration,
     ServiceOrderItemsApi,
@@ -15,7 +15,6 @@ import hashlib
 import logging
 import os
 import pandas as pd
-import pytesseract
 import re
 import requests
 import sys
@@ -23,19 +22,33 @@ import time
 
 load_dotenv()
 
-# Set up logging to log to a file
-log_file_path = os.path.join(os.getcwd(), 'tc-wires.log')
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file_path),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
+DRIVE = f'https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/'
 
-# DEBUG log the working directory
-logging.debug(f"Current working directory: {os.getcwd()}")
+
+def get_latest_service_record(asset_id, client):
+    """Get the latest service record for a given asset ID."""
+    ASR_api = AssetServiceRecordsApi(client)
+    records = ASR_api.asset_service_records_get_asset_service_records_by_asset(
+        asset_id=asset_id)
+    if not records:
+        return None
+    return max(records, key=lambda x: x.service_date)
+
+
+def initialize_logging():
+    """Set up logging to log to a file"""
+    log_file_path = os.path.join(os.getcwd(), 'tc-wires.log')
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_path),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+    logging.debug(f"Current working directory: {os.getcwd()}")
 
 
 def hash_df(df):
@@ -44,8 +57,23 @@ def hash_df(df):
         ).hexdigest()
 
 
-def retrieve_wire_roll_cert_number(cert_guid):
-    certificate_document_pdf = SOD_api.service_order_documents_get_document(  # noqa: E501
+def retrieve_wire_roll_SN(SOD_api, cert_guid):
+    """
+    Retrieve the serial number of a wire roll from a certificate document.
+
+    Parameters:
+        SOD_api (ServiceOrderDocumentsApi): An instance of the ServiceOrderDocumentsApi
+            used to interact with service order documents.
+        cert_guid (str): The GUID of the certificate document to retrieve.
+
+    Returns:
+        str: The serial number of the wire roll if found in the document.
+
+    Raises:
+        ValueError: If the document cannot be retrieved or the serial number
+            cannot be found in the document.
+    """
+    certificate_document_pdf = SOD_api.service_order_documents_get_document(
         guid=cert_guid, _preload_content=False
         )
     if not certificate_document_pdf:
@@ -54,73 +82,88 @@ def retrieve_wire_roll_cert_number(cert_guid):
     images = convert_from_bytes(certificate_document_pdf.data, dpi=300)
     pattern = r"The above expendable wireset was made from wire roll\s+(.*?)\.\s"  # noqa: E501
     for i, img in enumerate(images):
-        text = pytesseract.image_to_string(img)
+        text = image_to_string(img)
         if match := re.search(pattern, text, re.IGNORECASE | re.DOTALL):
             return match.group(1).strip()
 
 
-def save_to_sharepoint(existing_df):
+def save_to_sharepoint(df, headers):
     buffer = BytesIO()
-    existing_df.to_excel(buffer, index=False)
-    buffer.seek(0)
+    df.to_excel(buffer, index=False)
 
-    upload_url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/Pyro/WireSetCerts.xlsx:/content"  # noqa: E501
-    upload_resp = requests.put(upload_url, headers=headers, data=buffer)
-    upload_resp.raise_for_status()
+    url = f"{DRIVE}Pyro/WireSetCerts.xlsx:/content"
+    attempts = 0
+    max_attempts = 5
+    wait = 5  # seconds
+    while attempts < max_attempts:
+        attempts += 1
+        try:
+            buffer.seek(0)
+            upload_resp = requests.put(url, headers=headers, data=buffer)
+            upload_resp.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error uploading file: {e}")
+            wait *= 2  # Exponential backoff
+            if attempts >= max_attempts:
+                logging.error("Max attempts reached. Exiting.")
+                raise
+            time.sleep(wait)  # Wait before retrying
+        else:
+            break
 
     logging.info("Successfully uploaded updated Excel to SharePoint.")
 
 
-def perform_lookups():
+def perform_lookups(client):
     """Perform lookups and update the Excel file with wire roll certificate
     numbers."""
+
+    SOI_api = ServiceOrderItemsApi(client)
+    SOD_api = ServiceOrderDocumentsApi(client)
+    azure_token = acquire_azure_access_token()
+    headers = {"Authorization": f"Bearer {azure_token}"}
     # Load existing output if it exists
-    download_url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/Pyro/WireSetCerts.xlsx:/content"  # noqa: E501
+    download_url = f"{DRIVE}Pyro/WireSetCerts.xlsx:/content"
     resp = requests.get(download_url, headers=headers)
     resp.raise_for_status()
 
-    existing_df = pd.read_excel(BytesIO(resp.content), dtype={"asset_id": "Int64"}, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
+    df = pd.read_excel(BytesIO(resp.content), dtype={"asset_id": "Int64"}, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
 
-    before_hash = hash_df(existing_df.copy())
+    before_hash = hash_df(df.copy())
 
     start_time = time.time()
 
-    for idx, row in tqdm(existing_df.iterrows(),
-                         total=len(existing_df),
+    for idx, row in tqdm(df.iterrows(),
+                         total=len(df),
                          desc="Processing assets",
-                         **{'file': sys.stdout}):
+                         **{'file': sys.stdout},
+                         dynamic_ncols=True):
         asset_id = row.get("asset_id")
         if pd.isna(asset_id):
             continue
 
-        # Get latest service record
-        ASR_api = AssetServiceRecordsApi(client)
-        service_records = ASR_api.asset_service_records_get_asset_service_records_by_asset(asset_id=asset_id)  # noqa: E501
-        if not service_records:
+        if not (latest := get_latest_service_record(asset_id, client)):
             tqdm.write(f"No service records found for asset ID: {asset_id}")
             continue
 
-        latest = service_records[-1]
-
         if str(latest.asset_tag) != row.get("asset_tag"):
-            tqdm.write(f"Asset tag mismatch for asset ID: {asset_id}. Overwriting.")  # noqa: E501
+            tqdm.write(f"Overwriting Asset tag for asset ID: {asset_id}.")
 
         if str(latest.serial_number) != row.get("serial_number"):
-            tqdm.write(f"Serial Number mismatch for asset ID: {asset_id}. Overwriting.")  # noqa: E501
+            tqdm.write(f"Overwriting Serial Number for asset ID: {asset_id}.")
 
         existing_date = row["service_date"]
         if pd.notna(existing_date) and existing_date == latest.service_date:
             continue
 
-        existing_df.at[idx, "wire_roll_cert_number"] = None
-        existing_df.at[idx, "serial_number"] = latest.serial_number
-        existing_df.at[idx, "asset_tag"] = latest.asset_tag
-        existing_df.at[idx, "custom_order_number"] = latest.custom_order_number
-        existing_df.at[idx, "service_date"] = latest.service_date
-        existing_df.at[idx, "next_service_date"] = latest.next_service_date
+        df.at[idx, "wire_roll_cert_number"] = None
+        df.at[idx, "serial_number"] = latest.serial_number
+        df.at[idx, "asset_tag"] = latest.asset_tag
+        df.at[idx, "custom_order_number"] = latest.custom_order_number
+        df.at[idx, "service_date"] = latest.service_date
+        df.at[idx, "next_service_date"] = latest.next_service_date
 
         # Find related service order item
-        SOI_api = ServiceOrderItemsApi(client)
         service_order_items = SOI_api.service_order_items_get_work_items_0(
             work_item_number=latest.custom_order_number,
         )
@@ -128,11 +171,11 @@ def perform_lookups():
         for item in service_order_items:
             if int(item.asset_id) == int(asset_id):
                 service_order_id = item.service_order_id
-                existing_df.at[idx, 'certificate_number'] = item.certificate_number  # noqa: E501
+                df.at[idx, 'certificate_number'] = item.certificate_number
                 break
 
         if not service_order_id:
-            tqdm.write(f"No matching work item for asset ID: {asset_id}")
+            tqdm.write(f"No matching work item for asset: {asset_id}")
             continue
 
         # Find certificate document
@@ -148,13 +191,14 @@ def perform_lookups():
                 break
 
         if certificate_document:
-            existing_df.at[idx, 'wire_roll_cert_number'] = retrieve_wire_roll_cert_number(certificate_document.guid)  # noqa: E501
+            roll_sn = retrieve_wire_roll_SN(SOD_api, certificate_document.guid)
+            df.at[idx, 'wire_roll_cert_number'] = roll_sn
         else:
-            tqdm.write(f"No certificate document found for asset ID: {asset_id}")  # noqa: E501
+            tqdm.write(f"No certificate found for asset ID: {asset_id}")
 
-    after_hash = hash_df(existing_df)
+    after_hash = hash_df(df)
     if before_hash != after_hash:
-        save_to_sharepoint(existing_df)
+        save_to_sharepoint(df, headers)
     else:
         logging.info("No changes detected; skipping upload.")
 
@@ -166,7 +210,9 @@ def perform_lookups():
 
 
 def get_qualer_token():
-    url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/General/apikey.txt:/content"  # noqa: E501
+    azure_token = acquire_azure_access_token()
+    headers = {"Authorization": f"Bearer {azure_token}"}
+    url = f"{DRIVE}General/apikey.txt:/content"
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     return resp.text.strip()
@@ -189,13 +235,9 @@ def acquire_azure_access_token():
 
 
 if __name__ == "__main__":
-    DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
-
-    azure_token = acquire_azure_access_token()
-    headers = {"Authorization": f"Bearer {azure_token}"}
-
+    initialize_logging()
     tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
-    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    pytesseract.tesseract_cmd = tesseract_path
 
     config = Configuration()
     config.host = "https://jgiquality.qualer.com"
@@ -203,15 +245,12 @@ if __name__ == "__main__":
     client = ApiClient(configuration=config)
     client.default_headers["Authorization"] = get_qualer_token()
 
-    assets_api = AssetsApi(client)
-    SOD_api = ServiceOrderDocumentsApi(client)
-
     # Loop until 5 PM
     while time.localtime().tm_hour < 17:
         current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         logging.info(f"Starting update at {current_timestamp}")
         try:
-            perform_lookups()
+            perform_lookups(client)
         except Exception as e:
             logging.error(f"An error occurred: {e}")
         # wait for 10 minutes
