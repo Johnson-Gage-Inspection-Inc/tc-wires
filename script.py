@@ -62,7 +62,6 @@ def retrieve_wire_roll_cert_number(cert_guid):
 def save_to_sharepoint(df, h):
     buffer = BytesIO()
     df.to_excel(buffer, index=False)
-    buffer.seek(0)
 
     upload_url = f"{DRIVE}Pyro/WireSetCerts.xlsx:/content"
     attempts = 0
@@ -71,6 +70,7 @@ def save_to_sharepoint(df, h):
     while attempts < max_attempts:
         attempts += 1
         try:
+            buffer.seek(0)  # Reset buffer pointer before each retry
             upload_resp = requests.put(upload_url, headers=h, data=buffer)
             upload_resp.raise_for_status()
         except requests.exceptions.RequestException as e:
