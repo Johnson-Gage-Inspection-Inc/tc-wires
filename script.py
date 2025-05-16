@@ -191,8 +191,8 @@ def perform_lookups(client):
                 break
 
         if certificate_document:
-            Roll_SN = retrieve_wire_roll_SN(SOD_api, certificate_document.guid)
-            df.at[idx, 'wire_roll_cert_number'] = Roll_SN
+            roll_sn = retrieve_wire_roll_SN(SOD_api, certificate_document.guid)
+            df.at[idx, 'wire_roll_cert_number'] = roll_sn
         else:
             tqdm.write(f"No certificate found for asset ID: {asset_id}")
 
