@@ -45,7 +45,7 @@ def hash_df(df):
 
 
 def retrieve_wire_roll_cert_number(cert_guid):
-    certificate_document_pdf = SOD_api.service_order_documents_get_document(  # noqa: E501
+    certificate_document_pdf = SOD_api.service_order_documents_get_document(
         guid=cert_guid, _preload_content=False
         )
     if not certificate_document_pdf:
@@ -89,8 +89,11 @@ def save_to_sharepoint(df, h):
 def perform_lookups():
     """Perform lookups and update the Excel file with wire roll certificate
     numbers."""
+
+    azure_token = acquire_azure_access_token()
+    headers = {"Authorization": f"Bearer {azure_token}"}
     # Load existing output if it exists
-    download_url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/Pyro/WireSetCerts.xlsx:/content"  # noqa: E501
+    download_url = f"{DRIVE}Pyro/WireSetCerts.xlsx:/content"
     resp = requests.get(download_url, headers=headers)
     resp.raise_for_status()
 
@@ -169,7 +172,7 @@ def perform_lookups():
 
     after_hash = hash_df(existing_df)
     if before_hash != after_hash:
-        save_to_sharepoint(existing_df)
+        save_to_sharepoint(existing_df, headers)
     else:
         logging.info("No changes detected; skipping upload.")
 
@@ -181,7 +184,9 @@ def perform_lookups():
 
 
 def get_qualer_token():
-    url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/General/apikey.txt:/content"  # noqa: E501
+    azure_token = acquire_azure_access_token()
+    headers = {"Authorization": f"Bearer {azure_token}"}
+    url = f"{DRIVE}General/apikey.txt:/content"
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     return resp.text.strip()
@@ -205,9 +210,7 @@ def acquire_azure_access_token():
 
 if __name__ == "__main__":
     DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
-
-    azure_token = acquire_azure_access_token()
-    headers = {"Authorization": f"Bearer {azure_token}"}
+    DRIVE = f'https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/'
 
     tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
