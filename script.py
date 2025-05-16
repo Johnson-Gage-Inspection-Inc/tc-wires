@@ -97,14 +97,14 @@ def perform_lookups():
     resp = requests.get(download_url, headers=headers)
     resp.raise_for_status()
 
-    existing_df = pd.read_excel(BytesIO(resp.content), dtype={"asset_id": "Int64"}, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
+    df = pd.read_excel(BytesIO(resp.content), dtype={"asset_id": "Int64"}, parse_dates=['service_date', 'next_service_date'])  # noqa: E501
 
-    before_hash = hash_df(existing_df.copy())
+    before_hash = hash_df(df.copy())
 
     start_time = time.time()
 
-    for idx, row in tqdm(existing_df.iterrows(),
-                         total=len(existing_df),
+    for idx, row in tqdm(df.iterrows(),
+                         total=len(df),
                          desc="Processing assets",
                          **{'file': sys.stdout}):
         asset_id = row.get("asset_id")
@@ -130,12 +130,12 @@ def perform_lookups():
         if pd.notna(existing_date) and existing_date == latest.service_date:
             continue
 
-        existing_df.at[idx, "wire_roll_cert_number"] = None
-        existing_df.at[idx, "serial_number"] = latest.serial_number
-        existing_df.at[idx, "asset_tag"] = latest.asset_tag
-        existing_df.at[idx, "custom_order_number"] = latest.custom_order_number
-        existing_df.at[idx, "service_date"] = latest.service_date
-        existing_df.at[idx, "next_service_date"] = latest.next_service_date
+        df.at[idx, "wire_roll_cert_number"] = None
+        df.at[idx, "serial_number"] = latest.serial_number
+        df.at[idx, "asset_tag"] = latest.asset_tag
+        df.at[idx, "custom_order_number"] = latest.custom_order_number
+        df.at[idx, "service_date"] = latest.service_date
+        df.at[idx, "next_service_date"] = latest.next_service_date
 
         # Find related service order item
         SOI_api = ServiceOrderItemsApi(client)
@@ -146,7 +146,7 @@ def perform_lookups():
         for item in service_order_items:
             if int(item.asset_id) == int(asset_id):
                 service_order_id = item.service_order_id
-                existing_df.at[idx, 'certificate_number'] = item.certificate_number  # noqa: E501
+                df.at[idx, 'certificate_number'] = item.certificate_number
                 break
 
         if not service_order_id:
@@ -167,13 +167,13 @@ def perform_lookups():
 
         if certificate_document:
             WRollSN = retrieve_wire_roll_cert_number(certificate_document.guid)
-            existing_df.at[idx, 'wire_roll_cert_number'] = WRollSN
+            df.at[idx, 'wire_roll_cert_number'] = WRollSN
         else:
             tqdm.write(f"No certificate  found for asset ID: {asset_id}")
 
-    after_hash = hash_df(existing_df)
+    after_hash = hash_df(df)
     if before_hash != after_hash:
-        save_to_sharepoint(existing_df, headers)
+        save_to_sharepoint(df, headers)
     else:
         logging.info("No changes detected; skipping upload.")
 
