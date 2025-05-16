@@ -26,6 +26,16 @@ DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
 DRIVE = f'https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/'
 
 
+def get_latest_service_record(asset_id, client):
+    """Get the latest service record for a given asset ID."""
+    ASR_api = AssetServiceRecordsApi(client)
+    records = ASR_api.asset_service_records_get_asset_service_records_by_asset(
+        asset_id=asset_id)
+    if not records:
+        return None
+    return max(records, key=lambda x: x.service_date)
+
+
 def initialize_logging():
     """Set up logging to log to a file"""
     log_file_path = os.path.join(os.getcwd(), 'tc-wires.log')
@@ -47,7 +57,7 @@ def hash_df(df):
         ).hexdigest()
 
 
-def retrieve_wire_roll_cert_number(cert_guid):
+def retrieve_wire_roll_SN(SOD_api, cert_guid):
     certificate_document_pdf = SOD_api.service_order_documents_get_document(
         guid=cert_guid, _preload_content=False
         )
@@ -89,10 +99,12 @@ def save_to_sharepoint(df, headers):
     logging.info("Successfully uploaded updated Excel to SharePoint.")
 
 
-def perform_lookups():
+def perform_lookups(client):
     """Perform lookups and update the Excel file with wire roll certificate
     numbers."""
 
+    SOI_api = ServiceOrderItemsApi(client)
+    SOD_api = ServiceOrderDocumentsApi(client)
     azure_token = acquire_azure_access_token()
     headers = {"Authorization": f"Bearer {azure_token}"}
     # Load existing output if it exists
@@ -109,19 +121,15 @@ def perform_lookups():
     for idx, row in tqdm(df.iterrows(),
                          total=len(df),
                          desc="Processing assets",
-                         **{'file': sys.stdout}):
+                         **{'file': sys.stdout},
+                         dynamic_ncols=True):
         asset_id = row.get("asset_id")
         if pd.isna(asset_id):
             continue
 
-        # Get latest service record
-        ASR_api = AssetServiceRecordsApi(client)
-        service_records = ASR_api.asset_service_records_get_asset_service_records_by_asset(asset_id=asset_id)  # noqa: E501
-        if not service_records:
+        if not (latest := get_latest_service_record(asset_id, client)):
             tqdm.write(f"No service records found for asset ID: {asset_id}")
             continue
-
-        latest = service_records[-1]
 
         if str(latest.asset_tag) != row.get("asset_tag"):
             tqdm.write(f"Overwriting Asset tag for asset ID: {asset_id}.")
@@ -141,7 +149,6 @@ def perform_lookups():
         df.at[idx, "next_service_date"] = latest.next_service_date
 
         # Find related service order item
-        SOI_api = ServiceOrderItemsApi(client)
         service_order_items = SOI_api.service_order_items_get_work_items_0(
             work_item_number=latest.custom_order_number,
         )
@@ -169,10 +176,10 @@ def perform_lookups():
                 break
 
         if certificate_document:
-            WRollSN = retrieve_wire_roll_cert_number(certificate_document.guid)
+            WRollSN = retrieve_wire_roll_SN(SOD_api, certificate_document.guid)
             df.at[idx, 'wire_roll_cert_number'] = WRollSN
         else:
-            tqdm.write(f"No certificate  found for asset ID: {asset_id}")
+            tqdm.write(f"No certificate found for asset ID: {asset_id}")
 
     after_hash = hash_df(df)
     if before_hash != after_hash:
@@ -223,14 +230,12 @@ if __name__ == "__main__":
     client = ApiClient(configuration=config)
     client.default_headers["Authorization"] = get_qualer_token()
 
-    SOD_api = ServiceOrderDocumentsApi(client)
-
     # Loop until 5 PM
     while time.localtime().tm_hour < 17:
         current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         logging.info(f"Starting update at {current_timestamp}")
         try:
-            perform_lookups()
+            perform_lookups(client)
         except Exception as e:
             logging.error(f"An error occurred: {e}")
         # wait for 10 minutes
