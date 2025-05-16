@@ -166,9 +166,10 @@ def perform_lookups():
                 break
 
         if certificate_document:
-            existing_df.at[idx, 'wire_roll_cert_number'] = retrieve_wire_roll_cert_number(certificate_document.guid)  # noqa: E501
+            WRollSN = retrieve_wire_roll_cert_number(certificate_document.guid)
+            existing_df.at[idx, 'wire_roll_cert_number'] = WRollSN
         else:
-            tqdm.write(f"No certificate document found for asset ID: {asset_id}")  # noqa: E501
+            tqdm.write(f"No certificate  found for asset ID: {asset_id}")
 
     after_hash = hash_df(existing_df)
     if before_hash != after_hash:
