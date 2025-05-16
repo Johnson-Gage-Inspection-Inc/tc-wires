@@ -59,14 +59,29 @@ def retrieve_wire_roll_cert_number(cert_guid):
             return match.group(1).strip()
 
 
-def save_to_sharepoint(existing_df):
+def save_to_sharepoint(df, h):
     buffer = BytesIO()
-    existing_df.to_excel(buffer, index=False)
+    df.to_excel(buffer, index=False)
     buffer.seek(0)
 
-    upload_url = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/Pyro/WireSetCerts.xlsx:/content"  # noqa: E501
-    upload_resp = requests.put(upload_url, headers=headers, data=buffer)
-    upload_resp.raise_for_status()
+    upload_url = f"{DRIVE}Pyro/WireSetCerts.xlsx:/content"
+    attempts = 0
+    max_attempts = 5
+    wait = 5  # seconds
+    while attempts < max_attempts:
+        attempts += 1
+        try:
+            upload_resp = requests.put(upload_url, headers=h, data=buffer)
+            upload_resp.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error uploading file: {e}")
+            wait *= 2  # Exponential backoff
+            if attempts >= max_attempts:
+                logging.error("Max attempts reached. Exiting.")
+                raise
+            time.sleep(wait)  # Wait before retrying
+        else:
+            break
 
     logging.info("Successfully uploaded updated Excel to SharePoint.")
 
