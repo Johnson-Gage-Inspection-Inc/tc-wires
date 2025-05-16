@@ -58,6 +58,21 @@ def hash_df(df):
 
 
 def retrieve_wire_roll_SN(SOD_api, cert_guid):
+    """
+    Retrieve the serial number of a wire roll from a certificate document.
+
+    Parameters:
+        SOD_api (ServiceOrderDocumentsApi): An instance of the ServiceOrderDocumentsApi
+            used to interact with service order documents.
+        cert_guid (str): The GUID of the certificate document to retrieve.
+
+    Returns:
+        str: The serial number of the wire roll if found in the document.
+
+    Raises:
+        ValueError: If the document cannot be retrieved or the serial number
+            cannot be found in the document.
+    """
     certificate_document_pdf = SOD_api.service_order_documents_get_document(
         guid=cert_guid, _preload_content=False
         )
