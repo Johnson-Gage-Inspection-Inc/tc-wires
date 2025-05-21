@@ -71,7 +71,7 @@ _If any one of these assumptions is violated, it is the responsibility of the Py
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/your-org/tc-wires.git
+git clone https://github.com/Johnson-Gage-Inspection-Inc/tc-wires.git
 cd tc-wires
 pip install -r requirements.txt
 ```
