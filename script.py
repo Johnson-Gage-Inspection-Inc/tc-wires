@@ -1,36 +1,38 @@
-from dotenv import load_dotenv
+import hashlib
+import logging
+import os
+import re
+import sys
+import time
 from io import BytesIO
+
+import pandas as pd
+import requests
+from dotenv import load_dotenv
 from msal import ConfidentialClientApplication
 from pdf2image import convert_from_bytes
-from pytesseract import pytesseract, image_to_string
-from tqdm import tqdm
+from pytesseract import image_to_string, pytesseract
 from qualer_sdk import (
     ApiClient,
     AssetServiceRecordsApi,
     Configuration,
-    ServiceOrderItemsApi,
     ServiceOrderDocumentsApi,
+    ServiceOrderItemsApi,
 )
-import hashlib
-import logging
-import os
-import pandas as pd
-import re
-import requests
-import sys
-import time
+from tqdm import tqdm
 
 load_dotenv()
 
 DRIVE_ID = os.environ["SHAREPOINT_DRIVE_ID"]
-DRIVE = f'https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/'
+DRIVE = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/"
 
 
 def get_latest_service_record(asset_id, client):
     """Get the latest service record for a given asset ID."""
     ASR_api = AssetServiceRecordsApi(client)
     records = ASR_api.asset_service_records_get_asset_service_records_by_asset(
-        asset_id=asset_id)
+        asset_id=asset_id
+    )
     if not records:
         return None
     return max(records, key=lambda x: x.service_date)
@@ -38,23 +40,21 @@ def get_latest_service_record(asset_id, client):
 
 def initialize_logging():
     """Set up logging to log to a file"""
-    log_file_path = os.path.join(os.getcwd(), 'tc-wires.log')
+    log_file_path = os.path.join(os.getcwd(), "tc-wires.log")
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[
             logging.FileHandler(log_file_path),
-            logging.StreamHandler(sys.stdout)
-        ]
+            logging.StreamHandler(sys.stdout),
+        ],
     )
 
     logging.debug(f"Current working directory: {os.getcwd()}")
 
 
 def hash_df(df):
-    return hashlib.md5(
-        pd.util.hash_pandas_object(df, index=True).values
-        ).hexdigest()
+    return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
 
 
 def retrieve_wire_roll_SN(SOD_api, cert_guid):
@@ -75,7 +75,7 @@ def retrieve_wire_roll_SN(SOD_api, cert_guid):
     """
     certificate_document_pdf = SOD_api.service_order_documents_get_document(
         guid=cert_guid, _preload_content=False
-        )
+    )
     if not certificate_document_pdf:
         raise ValueError(f"Failed to retrieve document with GUID: {cert_guid}")
 
@@ -130,18 +130,20 @@ def perform_lookups(client):
     df = pd.read_excel(
         BytesIO(resp.content),
         dtype={"asset_id": "Int64"},
-        parse_dates=['service_date', 'next_service_date']
-        )
+        parse_dates=["service_date", "next_service_date"],
+    )
 
     before_hash = hash_df(df.copy())
 
     start_time = time.time()
 
-    for idx, row in tqdm(df.iterrows(),
-                         total=len(df),
-                         desc="Processing assets",
-                         **{'file': sys.stdout},
-                         dynamic_ncols=True):
+    for idx, row in tqdm(
+        df.iterrows(),
+        total=len(df),
+        desc="Processing assets",
+        **{"file": sys.stdout},
+        dynamic_ncols=True,
+    ):
         asset_id = row.get("asset_id")
         if pd.isna(asset_id):
             continue
@@ -175,7 +177,7 @@ def perform_lookups(client):
         for item in service_order_items:
             if int(item.asset_id) == int(asset_id):
                 service_order_id = item.service_order_id
-                df.at[idx, 'certificate_number'] = item.certificate_number
+                df.at[idx, "certificate_number"] = item.certificate_number
                 break
 
         if not service_order_id:
@@ -185,18 +187,19 @@ def perform_lookups(client):
         # Find certificate document
         order_documents = SOD_api.service_order_documents_get_documents_list(
             service_order_id=service_order_id
-            )
+        )
         certificate_document = None
         for document in order_documents:
             prefix = latest.asset_tag.replace(" ", "")
-            if (document.document_name.startswith(prefix)
-                    and document.document_name.endswith('.pdf')):
+            if document.document_name.startswith(
+                prefix
+            ) and document.document_name.endswith(".pdf"):
                 certificate_document = document
                 break
 
         if certificate_document:
             roll_sn = retrieve_wire_roll_SN(SOD_api, certificate_document.guid)
-            df.at[idx, 'wire_roll_cert_number'] = roll_sn
+            df.at[idx, "wire_roll_cert_number"] = roll_sn
         else:
             tqdm.write(f"No certificate found for asset ID: {asset_id}")
 
@@ -208,9 +211,7 @@ def perform_lookups(client):
 
     duration = time.time() - start_time
     m, s = divmod(duration, 60)
-    logging.debug(
-        f"Script completed in {int(m)} minutes and {int(s)} seconds."
-        )
+    logging.debug(f"Script completed in {int(m)} minutes and {int(s)} seconds.")
 
 
 def get_qualer_token():
@@ -228,14 +229,16 @@ def acquire_azure_access_token():
         client_id=os.environ["AZURE_CLIENT_ID"],
         client_credential=os.environ["AZURE_CLIENT_SECRET"],
         authority=f"https://login.microsoftonline.com/{TENANT}",
-        )
-    result = app.acquire_token_for_client(scopes=[
-        "https://graph.microsoft.com/.default",
-    ])
+    )
+    result = app.acquire_token_for_client(
+        scopes=[
+            "https://graph.microsoft.com/.default",
+        ]
+    )
     if "access_token" not in result:
-        error_description = result.get('error_description')
+        error_description = result.get("error_description")
         raise Exception(f"Failed to acquire token: {error_description}")
-    return result['access_token']
+    return result["access_token"]
 
 
 if __name__ == "__main__":
@@ -251,7 +254,7 @@ if __name__ == "__main__":
 
     # Loop until 5 PM
     while time.localtime().tm_hour < 17:
-        current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+        current_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         logging.info(f"Starting update at {current_timestamp}")
         try:
             perform_lookups(client)
@@ -259,4 +262,5 @@ if __name__ == "__main__":
             logging.error(f"An error occurred: {e}")
         # wait for 10 minutes
         time.sleep(600)
+    logging.info("Script finished running at 5 PM.")
     logging.info("Script finished running at 5 PM.")
