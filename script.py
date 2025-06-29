@@ -263,4 +263,3 @@ if __name__ == "__main__":
         # wait for 10 minutes
         time.sleep(600)
     logging.info("Script finished running at 5 PM.")
-    logging.info("Script finished running at 5 PM.")
