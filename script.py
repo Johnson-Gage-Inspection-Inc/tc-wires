@@ -61,13 +61,14 @@ def hash_df(df):
     ).hexdigest()
 
 
-def retrieve_wire_roll_SN(client, cert_guid):
+def retrieve_wire_roll_SN(client: AuthenticatedClient, cert_guid: uuid.UUID) -> str:
     """
     Retrieve the serial number of a wire roll from a certificate document.
 
     Parameters:
         client: The authenticated client for API calls.
-        cert_guid (str): The GUID of the certificate document to retrieve.
+        cert_guid (UUID): The GUID of the certificate document to
+            retrieve.
 
     Returns:
         str: The serial number of the wire roll if found in the document.
@@ -76,20 +77,47 @@ def retrieve_wire_roll_SN(client, cert_guid):
         ValueError: If the document cannot be retrieved or the serial number
             cannot be found in the document.
     """
-    # Convert string GUID to UUID
-    cert_uuid = uuid.UUID(cert_guid)
-    
-    response = get_document.sync(guid=cert_uuid, client=client)
+    try:
+        response = get_document.sync_detailed(guid=cert_guid, client=client)
+    except UnicodeDecodeError as e:
+        logging.error(f"Unicode decode error for document {cert_guid}: {e}")
+        raise ValueError(
+            f"Failed to retrieve document with GUID: {cert_guid} - "
+            "Unicode decode error"
+        )
+
     if not response:
         raise ValueError(f"Failed to retrieve document with GUID: {cert_guid}")
 
     # The response should be binary content (PDF data)
-    images = convert_from_bytes(response, dpi=300)
+    # Handle different response types - it might be wrapped in an object
+    logging.debug(f"Response type: {type(response)}")
+    if hasattr(response, 'content'):
+        pdf_data = response.content
+    elif isinstance(response, bytes):
+        pdf_data = response
+    else:
+        # The response might be a file-like object or other format
+        try:
+            # Try to read it as bytes directly
+            if hasattr(response, 'read'):
+                pdf_data = response.read()
+            else:
+                pdf_data = response
+        except Exception as e:
+            logging.error(f"Error processing response: {e}")
+            raise ValueError(f"Could not process document response: {e}")
+
+    images = convert_from_bytes(pdf_data, dpi=300)
     patn = r"The above expendable wireset was made from wire roll\s+(.*?)\.\s"
     for i, img in enumerate(images):
         text = image_to_string(img)
         if match := re.search(patn, text, re.IGNORECASE | re.DOTALL):
             return match.group(1).strip()
+
+    raise ValueError(
+        f"Failed to extract wire roll serial number from document: {cert_guid}"
+    )
 
 
 def save_to_sharepoint(df, headers):
