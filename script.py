@@ -285,7 +285,10 @@ def acquire_azure_access_token():
 
 if __name__ == "__main__":
     initialize_logging()
-    tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
+    tesseract_path = os.environ.get(
+        "TESSERACT_PATH",  # Local path from .env
+        "C:/Program Files/Tesseract-OCR/tesseract.exe"  # Default path
+        )
     pytesseract.tesseract_cmd = tesseract_path
 
     client = AuthenticatedClient(
