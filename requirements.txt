@@ -1,5 +1,5 @@
 dotenv
-git+https://github.com/Johnson-Gage-Inspection-Inc/qualer-sdk-python.git@c948da4#egg=qualer_sdk
+git+https://github.com/Johnson-Gage-Inspection-Inc/qualer-sdk-python.git@3abd0f5a7eecd362a654cce4359a27f0cdec71a7#egg=qualer_sdk
 msal
 openpyxl
 pandas

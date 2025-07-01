@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import time
+import uuid
 from io import BytesIO
 
 import pandas as pd
@@ -12,12 +13,14 @@ from dotenv import load_dotenv
 from msal import ConfidentialClientApplication
 from pdf2image import convert_from_bytes
 from pytesseract import image_to_string, pytesseract
-from qualer_sdk import (
-    ApiClient,
-    AssetServiceRecordsApi,
-    Configuration,
-    ServiceOrderDocumentsApi,
-    ServiceOrderItemsApi,
+from qualer_sdk.client import AuthenticatedClient
+from qualer_sdk.api.asset_service_records import (
+    get_asset_service_records_by_asset,
+)
+from qualer_sdk.api.service_order_items import get_work_items_workitems
+from qualer_sdk.api.service_order_documents import (
+    get_documents_list,
+    get_document,
 )
 from tqdm import tqdm
 
@@ -29,9 +32,8 @@ DRIVE = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/"
 
 def get_latest_service_record(asset_id, client):
     """Get the latest service record for a given asset ID."""
-    ASR_api = AssetServiceRecordsApi(client)
-    records = ASR_api.asset_service_records_get_asset_service_records_by_asset(
-        asset_id=asset_id
+    records = get_asset_service_records_by_asset.sync(
+        asset_id=asset_id, client=client
     )
     if not records:
         return None
@@ -54,17 +56,19 @@ def initialize_logging():
 
 
 def hash_df(df):
-    return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+    return hashlib.md5(
+        pd.util.hash_pandas_object(df, index=True).values
+    ).hexdigest()
 
 
-def retrieve_wire_roll_SN(SOD_api, cert_guid):
+def retrieve_wire_roll_SN(client: AuthenticatedClient, cert_guid: uuid.UUID) -> str:
     """
     Retrieve the serial number of a wire roll from a certificate document.
 
     Parameters:
-        SOD_api (ServiceOrderDocumentsApi): An instance of the API used to
-            interact with service order documents.
-        cert_guid (str): The GUID of the certificate document to retrieve.
+        client: The authenticated client for API calls.
+        cert_guid (UUID): The GUID of the certificate document to
+            retrieve.
 
     Returns:
         str: The serial number of the wire roll if found in the document.
@@ -73,18 +77,47 @@ def retrieve_wire_roll_SN(SOD_api, cert_guid):
         ValueError: If the document cannot be retrieved or the serial number
             cannot be found in the document.
     """
-    certificate_document_pdf = SOD_api.service_order_documents_get_document(
-        guid=cert_guid, _preload_content=False
-    )
-    if not certificate_document_pdf:
+    try:
+        response = get_document.sync_detailed(guid=cert_guid, client=client)
+    except UnicodeDecodeError as e:
+        logging.error(f"Unicode decode error for document {cert_guid}: {e}")
+        raise ValueError(
+            f"Failed to retrieve document with GUID: {cert_guid} - "
+            "Unicode decode error"
+        )
+
+    if not response:
         raise ValueError(f"Failed to retrieve document with GUID: {cert_guid}")
 
-    images = convert_from_bytes(certificate_document_pdf.data, dpi=300)
+    # The response should be binary content (PDF data)
+    # Handle different response types - it might be wrapped in an object
+    logging.debug(f"Response type: {type(response)}")
+    if hasattr(response, 'content'):
+        pdf_data = response.content
+    elif isinstance(response, bytes):
+        pdf_data = response
+    else:
+        # The response might be a file-like object or other format
+        try:
+            # Try to read it as bytes directly
+            if hasattr(response, 'read'):
+                pdf_data = response.read()
+            else:
+                pdf_data = response
+        except Exception as e:
+            logging.error(f"Error processing response: {e}")
+            raise ValueError(f"Could not process document response: {e}")
+
+    images = convert_from_bytes(pdf_data, dpi=300)
     patn = r"The above expendable wireset was made from wire roll\s+(.*?)\.\s"
     for i, img in enumerate(images):
         text = image_to_string(img)
         if match := re.search(patn, text, re.IGNORECASE | re.DOTALL):
             return match.group(1).strip()
+
+    raise ValueError(
+        f"Failed to extract wire roll serial number from document: {cert_guid}"
+    )
 
 
 def save_to_sharepoint(df, headers):
@@ -118,8 +151,6 @@ def perform_lookups(client):
     """Perform lookups and update the Excel file with wire roll certificate
     numbers."""
 
-    SOI_api = ServiceOrderItemsApi(client)
-    SOD_api = ServiceOrderDocumentsApi(client)
     azure_token = acquire_azure_access_token()
     headers = {"Authorization": f"Bearer {azure_token}"}
     # Load existing output if it exists
@@ -170,7 +201,8 @@ def perform_lookups(client):
         df.at[idx, "next_service_date"] = latest.next_service_date
 
         # Find related service order item
-        service_order_items = SOI_api.service_order_items_get_work_items_0(
+        service_order_items = get_work_items_workitems.sync(
+            client=client,
             work_item_number=latest.custom_order_number,
         )
         service_order_id = None
@@ -185,8 +217,8 @@ def perform_lookups(client):
             continue
 
         # Find certificate document
-        order_documents = SOD_api.service_order_documents_get_documents_list(
-            service_order_id=service_order_id
+        order_documents = get_documents_list.sync(
+            service_order_id=service_order_id, client=client
         )
         certificate_document = None
         for document in order_documents:
@@ -198,7 +230,7 @@ def perform_lookups(client):
                 break
 
         if certificate_document:
-            roll_sn = retrieve_wire_roll_SN(SOD_api, certificate_document.guid)
+            roll_sn = retrieve_wire_roll_SN(client, certificate_document.guid)
             df.at[idx, "wire_roll_cert_number"] = roll_sn
         else:
             tqdm.write(f"No certificate found for asset ID: {asset_id}")
@@ -211,16 +243,26 @@ def perform_lookups(client):
 
     duration = time.time() - start_time
     m, s = divmod(duration, 60)
-    logging.debug(f"Script completed in {int(m)} minutes and {int(s)} seconds.")
+    logging.debug(
+        f"Script completed in {int(m)} minutes and {int(s)} seconds."
+    )
 
 
 def get_qualer_token():
-    azure_token = acquire_azure_access_token()
-    headers = {"Authorization": f"Bearer {azure_token}"}
-    url = f"{DRIVE}General/apikey.txt:/content"
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.text.strip()
+    """Get the Qualer API token from environment variables."""
+    key = os.environ.get("QUALER_API_KEY")
+    if not key:  # Handle case where key is None or empty
+        azure_token = acquire_azure_access_token()
+        headers = {"Authorization": f"Bearer {azure_token}"}
+        url = f"{DRIVE}General/apikey.txt:/content"
+        resp = requests.get(url, headers=headers)
+        resp.raise_for_status()
+        key = resp.text.strip()
+        # Remove the "Api-Key " prefix if it exists
+        if key.startswith("Api-Token "):
+            key = key[10:]
+
+    return key
 
 
 def acquire_azure_access_token():
@@ -243,14 +285,16 @@ def acquire_azure_access_token():
 
 if __name__ == "__main__":
     initialize_logging()
-    tesseract_path = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
+    tesseract_path = os.environ.get(
+        "TESSERACT_PATH",  # Local path from .env
+        "C:/Program Files/Tesseract-OCR/tesseract.exe"  # Default path
+        )
     pytesseract.tesseract_cmd = tesseract_path
 
-    config = Configuration()
-    config.host = "https://jgiquality.qualer.com"
-
-    client = ApiClient(configuration=config)
-    client.default_headers["Authorization"] = get_qualer_token()
+    client = AuthenticatedClient(
+        base_url="https://jgiquality.qualer.com",
+        token=get_qualer_token()
+    )
 
     # Loop until 5 PM
     while time.localtime().tm_hour < 17:
