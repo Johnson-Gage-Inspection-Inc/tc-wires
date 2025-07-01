@@ -14,8 +14,8 @@ from msal import ConfidentialClientApplication
 from pdf2image import convert_from_bytes
 from pytesseract import image_to_string, pytesseract
 from qualer_sdk.client import AuthenticatedClient
-from qualer_sdk.api.client_asset_service_records import (
-    get_asset_service_records_by_asset_get_2,
+from qualer_sdk.api.asset_service_records import (
+    get_asset_service_records_by_asset,
 )
 from qualer_sdk.api.service_order_items import get_work_items_workitems
 from qualer_sdk.api.service_order_documents import (
@@ -32,7 +32,7 @@ DRIVE = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/root:/"
 
 def get_latest_service_record(asset_id, client):
     """Get the latest service record for a given asset ID."""
-    records = get_asset_service_records_by_asset_get_2.sync(
+    records = get_asset_service_records_by_asset.sync(
         asset_id=asset_id, client=client
     )
     if not records:
