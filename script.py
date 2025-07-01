@@ -250,8 +250,8 @@ def perform_lookups(client):
 
 def get_qualer_token():
     """Get the Qualer API token from environment variables."""
-    key = os.environ["QUALER_API_KEY"]
-    if not key:
+    key = os.environ.get("QUALER_API_KEY")
+    if not key:  # Handle case where key is None or empty
         azure_token = acquire_azure_access_token()
         headers = {"Authorization": f"Bearer {azure_token}"}
         url = f"{DRIVE}General/apikey.txt:/content"
