@@ -221,12 +221,20 @@ def perform_lookups(client):
 
 
 def get_qualer_token():
-    azure_token = acquire_azure_access_token()
-    headers = {"Authorization": f"Bearer {azure_token}"}
-    url = f"{DRIVE}General/apikey.txt:/content"
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.text.strip()
+    """Get the Qualer API token from environment variables."""
+    key = os.environ["QUALER_API_KEY"]
+    if not key:
+        azure_token = acquire_azure_access_token()
+        headers = {"Authorization": f"Bearer {azure_token}"}
+        url = f"{DRIVE}General/apikey.txt:/content"
+        resp = requests.get(url, headers=headers)
+        resp.raise_for_status()
+        key = resp.text.strip()
+        # Remove the "Api-Key " prefix if it exists
+        if key.startswith("Api-Token "):
+            key = key[10:]
+
+    return key
 
 
 def acquire_azure_access_token():
